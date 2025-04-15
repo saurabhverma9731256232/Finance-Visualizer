@@ -1,19 +1,10 @@
-// src/app/api/transactions/[id]/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Transaction from "@/models/Transaction";
 
-// Type definition for route context
-interface Context {
-  params: {
-    id: string;
-  };
-}
-
-export async function DELETE(_request: NextRequest, context: Context) {
+export async function DELETE(request: Request, context: { params: any }) {
   await connectDB();
-  const { id } = context.params;
+  const { id } = context.params as { id: string };
 
   try {
     const deletedTransaction = await Transaction.findByIdAndDelete(id);
@@ -26,9 +17,9 @@ export async function DELETE(_request: NextRequest, context: Context) {
   }
 }
 
-export async function PUT(request: NextRequest, context: Context) {
+export async function PUT(request: Request, context: { params: any }) {
   await connectDB();
-  const { id } = context.params;
+  const { id } = context.params as { id: string };
   const body = await request.json();
 
   try {
