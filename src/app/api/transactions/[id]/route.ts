@@ -34,6 +34,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     return NextResponse.json(updatedTransaction);
   } catch (error) {
+    console.log("Error ", error);
     return NextResponse.json({ message: "Error updating transaction" }, { status: 500 });
   }
 }
