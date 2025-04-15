@@ -1,128 +1,188 @@
-"use client";
+"use client"
+import { useEffect, useState } from 'react';
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
+} from 'recharts';
 
-import { useEffect, useState } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-
-interface Transaction {
-  _id?: string;
-  amount: number;
-  description: string;
-  date: string;
-}
+const categories = ['Groceries', 'Transport', 'Food', 'Entertainment', 'Bills', 'Other'];
+const pieColors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#a4de6c', '#d0ed57'];
 
 export default function Home() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [form, setForm] = useState<Transaction>({
-    amount: 0,
-    description: "",
-    date: "",
-  });
+  const [transactions, setTransactions] = useState<any[]>([]); // Default value as an empty array
+  const [form, setForm] = useState({ amount: '', description: '', date: '', category: '' });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [categorySummary, setCategorySummary] = useState<any[]>([]);
+  const [monthlySummary, setMonthlySummary] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch("/api/transactions")
-      .then(res => res.json())
-      .then(setTransactions);
+    const fetchTransactions = async () => {
+      const res = await fetch('/api/transactions');
+      const data = await res.json();
+      // Ensure the data is an array before setting the state
+      setTransactions(Array.isArray(data) ? data : []);
+    };
+
+    const fetchSummary = async () => {
+      const res = await fetch('/api/transactions/summary');
+      const data = await res.json();
+      setCategorySummary(data.categorySummary || []);
+      setMonthlySummary(data.monthlySummary || []);
+    };
+
+    fetchTransactions();
+    fetchSummary();
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setForm({ ...form, [name]: name === "amount" ? Number(value) : value });
+  const handleSubmit = async () => {
+    if (!form.amount || !form.date || !form.category) {
+      alert("Amount, date, and category are required.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      let res;
+      if (editId) {
+        res = await fetch(`/api/transactions/${editId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...form, amount: parseFloat(form.amount) })
+        });
+      } else {
+        res = await fetch('/api/transactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...form, amount: parseFloat(form.amount) })
+        });
+      }
+
+      await res.json();
+      setEditId(null);
+      setForm({ amount: '', description: '', date: '', category: '' });
+
+      const txRes = await fetch('/api/transactions');
+      const txData = await txRes.json();
+      setTransactions(Array.isArray(txData) ? txData : []);
+
+      const sumRes = await fetch('/api/transactions/summary');
+      const sumData = await sumRes.json();
+      setCategorySummary(sumData.categorySummary || []);
+      setMonthlySummary(sumData.monthlySummary || []);
+    } catch (err) {
+      alert('Failed to save transaction');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const addTransaction = async () => {
-    if (!form.amount || !form.description || !form.date) return alert("Please fill all fields");
-
-    const res = await fetch("/api/transactions", {
-      method: "POST",
-      body: JSON.stringify(form),
-      headers: { "Content-Type": "application/json" },
+  const handleEdit = (t: any) => {
+    setForm({
+      amount: t.amount.toString(),
+      description: t.description,
+      date: new Date(t.date).toISOString().split('T')[0],
+      category: t.category,
     });
-
-    const newTx = await res.json();
-    setTransactions(prev => [newTx, ...prev]);
-    setForm({ amount: 0, description: "", date: "" });
+    setEditId(t._id);
   };
 
-  const deleteTransaction = async (id?: string) => {
-    if (!id) return;
-    await fetch(`/api/transactions/${id}`, { method: "DELETE" });
-    setTransactions(prev => prev.filter(tx => tx._id !== id));
+  const handleDelete = async (id: string) => {
+    await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
+    const updated = transactions.filter((t) => t._id !== id);
+    setTransactions(updated);
+
+    const res = await fetch('/api/transactions/summary');
+    const data = await res.json();
+    setCategorySummary(data.categorySummary || []);
+    setMonthlySummary(data.monthlySummary || []);
   };
-
-  // Group by month for chart
-  const monthlyTotals = transactions.reduce((acc, tx) => {
-    const month = new Date(tx.date).toLocaleString("default", { month: "short" });
-    acc[month] = (acc[month] || 0) + tx.amount;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const chartData = Object.entries(monthlyTotals).map(([month, total]) => ({
-    month,
-    total,
-  }));
 
   return (
     <main className="max-w-xl mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Personal Finance Visualizer</h1>
 
-      <input
-        type="number"
-        name="amount"
-        value={form.amount || ""}
-        onChange={handleChange}
-        placeholder="Amount"
-        className="w-full border rounded p-2 mb-2"
-      />
-      <input
-        type="text"
-        name="description"
-        value={form.description}
-        onChange={handleChange}
-        placeholder="Description"
-        className="w-full border rounded p-2 mb-2"
-      />
-      <input
-        type="date"
-        name="date"
-        value={form.date}
-        onChange={handleChange}
-        className="w-full border rounded p-2 mb-2"
-      />
-
-      <button
-        onClick={addTransaction}
-        className="bg-black text-white px-4 py-2 rounded mb-6"
-      >
-        Add Transaction
+      <input className="w-full mb-2 p-2 border" type="number" placeholder="Amount"
+        value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
+      <input className="w-full mb-2 p-2 border" type="text" placeholder="Description"
+        value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+      <input className="w-full mb-2 p-2 border" type="date"
+        value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+      <select className="w-full mb-2 p-2 border"
+        value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+        <option value="">Select Category</option>
+        {categories.map(cat => (
+          <option key={cat} value={cat}>{cat}</option>
+        ))}
+      </select>
+      <button onClick={handleSubmit}
+        className="bg-black text-white px-4 py-2 rounded mb-4"
+        disabled={loading}>
+        {loading ? 'Saving...' : editId ? 'Update Transaction' : 'Add Transaction'}
       </button>
 
-      <h2 className="text-lg font-semibold mb-2">Transactions</h2>
-      {transactions.map(tx => (
-        <div
-          key={tx._id}
-          className="flex justify-between items-center border p-2 rounded mb-1"
-        >
-          <span>
-            {tx.date.slice(0, 10)} - {tx.description}
-          </span>
-          <div className="flex gap-2 items-center">
-            <span>₹{tx.amount}</span>
-            <button onClick={() => deleteTransaction(tx._id)} className="text-red-600">
-              ❌
-            </button>
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="p-2 border rounded">
+          Total: ₹{Array.isArray(transactions) ? transactions.reduce((acc, t) => acc + t.amount, 0) : 0}
+        </div>
+        <div className="p-2 border rounded">Transactions: {transactions.length}</div>
+      </div>
+
+      <h2 className="font-semibold mb-2">Transactions</h2>
+      {transactions.map((t) => (
+        <div key={t._id} className="flex justify-between items-center border p-2 mb-1 rounded">
+          <div>
+            {new Date(t.date).toISOString().split('T')[0]} - {t.category} - {t.description} - ₹{t.amount}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => handleEdit(t)} className="text-blue-600">Edit</button>
+            <button onClick={() => handleDelete(t._id)} className="text-red-600">Delete</button>
           </div>
         </div>
       ))}
 
-      <h2 className="text-lg font-semibold mt-6 mb-2">Monthly Expenses</h2>
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={chartData}>
-          <XAxis dataKey="month" />
-          <YAxis />
-          <Tooltip />
-          <Bar dataKey="total" fill="rgba(99,102,241,0.6)" />
-        </BarChart>
-      </ResponsiveContainer>
+      {/* Pie Chart */}
+      <h2 className="font-semibold mt-6 mb-2">Category-wise Spending</h2>
+      {categorySummary.length > 0 ? (
+        <ResponsiveContainer width="100%" height={250}>
+          <PieChart>
+            <Pie
+              data={categorySummary}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              outerRadius={80}
+              fill="#8884d8"
+              label
+            >
+              {categorySummary.map((_, index) => (
+                <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
+              ))}
+            </Pie>
+            <Tooltip />
+          </PieChart>
+        </ResponsiveContainer>
+      ) : (
+        <p className="text-sm text-gray-500">No category data available.</p>
+      )}
+
+      {/* Bar Chart */}
+      <h2 className="font-semibold mt-6 mb-2">Monthly Spending</h2>
+      {monthlySummary.length > 0 ? (
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={monthlySummary}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="month" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <Bar dataKey="total" fill="#82ca9d" />
+          </BarChart>
+        </ResponsiveContainer>
+      ) : (
+        <p className="text-sm text-gray-500">No monthly data available.</p>
+      )}
     </main>
   );
 }

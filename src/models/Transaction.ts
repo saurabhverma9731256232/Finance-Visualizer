@@ -1,14 +1,19 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
-const TransactionSchema = new mongoose.Schema(
-  {
-    amount: Number,
-    description: String,
-    date: Date,
+const transactionSchema = new mongoose.Schema({
+  amount: {
+    type: Number,
+    required: true,
   },
-  { timestamps: true }
-);
+  description: String,
+  date: {
+    type: Date,
+    required: true,
+  },
+  category: {
+    type: String,
+    required: true, // Now required for Stage 2
+  },
+});
 
-export const Transaction =
-  mongoose.models.Transaction ||
-  mongoose.model("Transaction", TransactionSchema);
+export default mongoose.models.Transaction || mongoose.model('Transaction', transactionSchema);
