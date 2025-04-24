@@ -6,7 +6,6 @@ export async function GET() {
   await connectDB();
 
   try {
-    // CATEGORY-WISE SUMMARY
     const categoryAgg = await Transaction.aggregate([
       {
         $group: {
@@ -23,7 +22,6 @@ export async function GET() {
       },
     ]);
 
-    // MONTHLY SUMMARY
     const monthlyAgg = await Transaction.aggregate([
       {
         $group: {
@@ -42,10 +40,7 @@ export async function GET() {
         $addFields: {
           month: {
             $arrayElemAt: [
-              [
-                '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-              ],
+              ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
               '$monthNumber'
             ]
           },
@@ -63,6 +58,8 @@ export async function GET() {
     }, { status: 200 });
 
   } catch (error) {
+    console.error("SUMMARY API ERROR:", error);
     return NextResponse.json({ error: 'Failed to get summary' }, { status: 500 });
   }
 }
+
